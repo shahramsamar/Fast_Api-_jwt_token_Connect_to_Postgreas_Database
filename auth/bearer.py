@@ -1,41 +1,62 @@
-from fastapi import Request, HTTPException, Depends, status
+from fastapi import Request, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from models import TokenModel
+from models import TokenModel, UserModel
 from database.database import get_db
-from datetime import datetime
+import jwt
+from database.config import settings
+from datetime import datetime, timezone, timedelta
 
 
 class TokenBearer(HTTPBearer):
     def __init__(self, auto_error: bool = True):
         super(TokenBearer, self).__init__(auto_error=auto_error)
 
-    async def __call__(self, request: Request, db: Session = Depends(get_db)):
+    async def __call__(self,
+                       request: Request,
+                       db: Session = Depends(get_db)):
         credentials: HTTPAuthorizationCredentials = await super(TokenBearer, self).__call__(request)
         if credentials:
-            # Corrected scheme check
-            if credentials.scheme.lower() != "bearer":
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication schema.")
-            
-            # Verify the token and user
-            user = self.verify_token(db, credentials.credentials)
+            if not credentials.scheme == "Bearer":
+                raise HTTPException(
+                    status_code=401, detail="Invalid authentication scheme.")
+            user = self.verify_token(db,
+                                     credentials.credentials)
             if not user:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token or expired token.")
-            
+                raise HTTPException(
+                    status_code=401,
+                    detail="Invalid token or expired token.")
             return user
         else:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authorization code.")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid authorization code.")
 
     def verify_token(self, db, token: str):
-        # Query the token from the database
-        token_obj = db.query(TokenModel).filter(TokenModel.token == token).first()
-        if token_obj:
-            # Check if the token has expired
-            if token_obj.expiration_date < datetime.now():
+        try:
+            result = jwt.decode(token, 
+                                settings.SECRET_KEY,
+                                "HS256")
+            expiration_time = datetime.fromtimestamp(result["exp"]).astimezone()   
+                  
+            if  expiration_time < datetime.now().astimezone():
                 raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Token has expired.",
-                )
-            return token_obj.user
+                    status_code=401,
+                    detail="Invalid token or expired token. (exp)")
+            if result["token_type"] != "access":
+                raise HTTPException(
+                    status_code=401, 
+                    detail="Invalid token or expired token. (token_type)")
 
-        return None
+        except Exception as e:
+            raise HTTPException(
+                status_code=401,
+                detail=f"Invalid token or expired token.{e}")
+
+        user_obj = db.query(UserModel).filter(
+            UserModel.id == result["user_id"]).one_or_none()
+        if not user_obj:
+            raise HTTPException(
+                status_code=401,
+                detail="User Does not Exists")
+        return user_obj

@@ -1,6 +1,7 @@
-tags_metadata =[
+tags_metadata = [
     {
-        "name": "Blog",
+        "name":"Names",
         "description":"a simple crud application based on names"
     }
+    
 ]

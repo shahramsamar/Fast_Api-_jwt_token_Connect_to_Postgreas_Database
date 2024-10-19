@@ -1,3 +1,3 @@
-from .authentication import *
-from .users import *
+from .students import *
 from .token import *
+from .user import *

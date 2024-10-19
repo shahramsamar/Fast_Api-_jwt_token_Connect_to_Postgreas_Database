@@ -1,6 +1,4 @@
-#csetup fastapi 
-pip install fastapi[all]==0.112.0
-pip install fastapi[standard]==0.112.0
+#setup fastpip install fastapi[standard]==0.112.0
 
 # setup alebic and sql alchemy
 1 # setup 
